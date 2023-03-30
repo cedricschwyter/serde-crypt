@@ -6,7 +6,7 @@ custom serializer and deserializer for end-to-end encrypted serde serialization 
 [![Crate Version][crates-badge]][crates-url]
 [![Crate Coverage][coverage-badge]][coverage-url]
 
-[action-badge]: https://img.shields.io/github/actions/workflow/status/D3PSI/serde-crypt/build.yaml?branch=main&label=build&logo=github&style=flat-square
+[action-badge]: https://img.shields.io/github/actions/workflow/status/D3PSI/serde-crypt/build.yaml?branch=master&label=build&logo=github&style=flat-square
 [action-url]: https://github.com/D3PSI/serde-crypt/actions/workflows/build.yaml
 [crates-badge]: https://img.shields.io/crates/v/serde-crypt.svg?logo=rust&style=flat-square
 [crates-url]: https://crates.io/crates/serde-crypt
