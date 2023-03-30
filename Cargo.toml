@@ -8,6 +8,10 @@ description = "a serializer/deserializer for end-to-end encrypted serde serializ
 license = "GPL-3.0-or-later"
 repository = "https://github.com/D3PSI/serde-crypt"
 
+[[bin]]
+name = "serde-crypt"
+path = "./main.rs"
+
 [lib]
 path = "./lib.rs"
 crate-type = ["cdylib", "rlib"]
