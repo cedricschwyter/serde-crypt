@@ -15,3 +15,6 @@ serde_json = "1.0.89"
 base64 = "0.21.0"
 ring = "0.16.20"
 lazy_static = "1.4.0"
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3.33"

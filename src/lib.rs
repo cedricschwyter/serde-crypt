@@ -11,11 +11,11 @@ use ring::aead::{
 use ring::digest::{self, digest};
 use ring::error;
 use ring::rand::{SecureRandom, SystemRandom};
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde::{Deserializer, Serializer};
 
 pub const MASTER_KEY_LEN: usize = 32;
-const SEPARATOR: &str = ".";
 
 lazy_static! {
     pub static ref MASTER_KEY: Arc<Mutex<RefCell<[u8; MASTER_KEY_LEN]>>> =
@@ -23,28 +23,29 @@ lazy_static! {
 }
 
 #[allow(dead_code)]
-pub fn serialize<S: Serializer>(v: &Vec<u8>, s: S) -> Result<S::Ok, S::Error> {
+pub fn serialize<S: Serializer, T: Serialize>(v: T, s: S) -> Result<S::Ok, S::Error> {
     let nonce = generate_random_nonce();
-    let encrypted = encrypt(v.clone(), nonce).map_err(|e| serde::ser::Error::custom(e))?;
-    let base64 = general_purpose::URL_SAFE_NO_PAD
-        .encode([nonce.to_vec(), encrypted].join(SEPARATOR.as_bytes()));
+    let serialized = serde_json::to_string(&v)
+        .map_err(|e| serde::ser::Error::custom(e))
+        .map(|t| t.as_bytes().to_vec())?;
+    let mut encrypted = encrypt(serialized, nonce).map_err(|e| serde::ser::Error::custom(e))?;
+    let mut nonce_encrypted = nonce.to_vec();
+    nonce_encrypted.append(&mut encrypted);
+    let base64 = general_purpose::URL_SAFE_NO_PAD.encode(nonce_encrypted);
     String::serialize(&base64, s)
 }
 
 #[allow(dead_code)]
-pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<u8>, D::Error> {
+pub fn deserialize<'de, D: Deserializer<'de>, T: DeserializeOwned>(d: D) -> Result<T, D::Error> {
     let base64 = String::deserialize(d)?;
     let decoded = general_purpose::URL_SAFE_NO_PAD
         .decode(base64.as_bytes())
         .map_err(|e| serde::de::Error::custom(e))?;
-    let mut it = decoded.split(|e| *e == SEPARATOR.as_bytes()[0]);
-    let nonce = it
-        .next()
-        .unwrap()
-        .try_into()
-        .map_err(|e| serde::de::Error::custom(e))?;
-    let data = it.next().unwrap().to_vec();
-    decrypt(data, nonce).map_err(|e| serde::de::Error::custom(e))
+    let nonce = decoded[..NONCE_LEN].try_into().unwrap();
+    let data = decoded[NONCE_LEN..].to_vec();
+    let decrypted = decrypt(data.clone(), nonce).map_err(|e| serde::de::Error::custom(e))?;
+    let decrypted = std::str::from_utf8(&decrypted).map_err(|e| serde::de::Error::custom(e))?;
+    serde_json::from_str(decrypted).map_err(|e| serde::de::Error::custom(e))
 }
 
 pub fn setup(master_key: [u8; MASTER_KEY_LEN]) -> Result<(), Box<dyn Error>> {
@@ -123,6 +124,14 @@ mod test {
     struct Test {
         #[serde(with = "crate")]
         field: Vec<u8>,
+        #[serde(with = "crate")]
+        r#struct: Other,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+    struct Other {
+        #[serde(with = "crate")]
+        field: Vec<u8>,
     }
 
     #[test]
@@ -134,6 +143,9 @@ mod test {
         setup(key)?;
         let instance = Test {
             field: "a super secret message".as_bytes().to_vec(),
+            r#struct: Other {
+                field: "another secret message".as_bytes().to_vec(),
+            },
         };
         let serialized = serde_json::to_string(&instance)?;
         let deserialized: Test = serde_json::from_str(&serialized)?;
