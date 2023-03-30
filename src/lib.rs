@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use serde::{Deserializer, Serializer};
 
 pub const MASTER_KEY_LEN: usize = 32;
+const SEPARATOR: &str = ".";
 
 lazy_static! {
     pub static ref MASTER_KEY: Arc<Mutex<RefCell<[u8; MASTER_KEY_LEN]>>> =
@@ -25,9 +26,8 @@ lazy_static! {
 pub fn serialize<S: Serializer>(v: &Vec<u8>, s: S) -> Result<S::Ok, S::Error> {
     let nonce = generate_random_nonce();
     let encrypted = encrypt(v.clone(), nonce).map_err(|e| serde::ser::Error::custom(e))?;
-    let encrypted = std::str::from_utf8(&encrypted).map_err(|e| serde::ser::Error::custom(e))?;
-    let nonce = std::str::from_utf8(&nonce).map_err(|e| serde::ser::Error::custom(e))?;
-    let base64 = general_purpose::URL_SAFE_NO_PAD.encode([nonce, encrypted].join("."));
+    let base64 = general_purpose::URL_SAFE_NO_PAD
+        .encode([nonce.to_vec(), encrypted].join(SEPARATOR.as_bytes()));
     String::serialize(&base64, s)
 }
 
@@ -37,15 +37,13 @@ pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<u8>, D::Error>
     let decoded = general_purpose::URL_SAFE_NO_PAD
         .decode(base64.as_bytes())
         .map_err(|e| serde::de::Error::custom(e))?;
-    let decoded = std::str::from_utf8(&decoded).map_err(|e| serde::de::Error::custom(e))?;
-    let mut it = decoded.split('.');
+    let mut it = decoded.split(|e| *e == SEPARATOR.as_bytes()[0]);
     let nonce = it
         .next()
         .unwrap()
-        .as_bytes()
         .try_into()
         .map_err(|e| serde::de::Error::custom(e))?;
-    let data = it.next().unwrap().as_bytes().to_vec();
+    let data = it.next().unwrap().to_vec();
     decrypt(data, nonce).map_err(|e| serde::de::Error::custom(e))
 }
 
@@ -111,4 +109,37 @@ fn prepare_key(key: [u8; MASTER_KEY_LEN], nonce: [u8; NONCE_LEN]) -> (UnboundKey
     let key = digest.as_ref();
     let nonce_sequence = INonceSequence::new(Nonce::assume_unique_for_key(nonce));
     (UnboundKey::new(&AES_256_GCM, &key).unwrap(), nonce_sequence)
+}
+
+#[cfg(test)]
+mod test {
+    use ring::rand::{SecureRandom, SystemRandom};
+    use serde::{Deserialize, Serialize};
+
+    use crate::{setup, MASTER_KEY_LEN};
+    use std::error::Error;
+
+    #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+    struct Test {
+        #[serde(with = "crate")]
+        field: Vec<u8>,
+    }
+
+    #[test]
+    fn flow() -> Result<(), Box<dyn Error>> {
+        let mut key: [u8; MASTER_KEY_LEN] = [0; MASTER_KEY_LEN];
+        let rand_gen = SystemRandom::new();
+        rand_gen.fill(&mut key).unwrap();
+
+        setup(key)?;
+        let instance = Test {
+            field: "a super secret message".as_bytes().to_vec(),
+        };
+        let serialized = serde_json::to_string(&instance)?;
+        let deserialized: Test = serde_json::from_str(&serialized)?;
+
+        assert_eq!(deserialized.field, instance.field);
+
+        Ok(())
+    }
 }
