@@ -26,9 +26,9 @@ lazy_static! {
 pub fn serialize<S: Serializer, T: Serialize>(v: T, s: S) -> Result<S::Ok, S::Error> {
     let nonce = generate_random_nonce();
     let serialized = serde_json::to_string(&v)
-        .map_err(|e| serde::ser::Error::custom(e))
+        .map_err(serde::ser::Error::custom)
         .map(|t| t.as_bytes().to_vec())?;
-    let mut encrypted = encrypt(serialized, nonce).map_err(|e| serde::ser::Error::custom(e))?;
+    let mut encrypted = encrypt(serialized, nonce).map_err(serde::ser::Error::custom)?;
     let mut nonce_encrypted = nonce.to_vec();
     nonce_encrypted.append(&mut encrypted);
     let base64 = general_purpose::URL_SAFE_NO_PAD.encode(nonce_encrypted);
@@ -40,12 +40,12 @@ pub fn deserialize<'de, D: Deserializer<'de>, T: DeserializeOwned>(d: D) -> Resu
     let base64 = String::deserialize(d)?;
     let decoded = general_purpose::URL_SAFE_NO_PAD
         .decode(base64.as_bytes())
-        .map_err(|e| serde::de::Error::custom(e))?;
+        .map_err(serde::de::Error::custom)?;
     let nonce = decoded[..NONCE_LEN].try_into().unwrap();
     let data = decoded[NONCE_LEN..].to_vec();
-    let decrypted = decrypt(data.clone(), nonce).map_err(|e| serde::de::Error::custom(e))?;
-    let decrypted = std::str::from_utf8(&decrypted).map_err(|e| serde::de::Error::custom(e))?;
-    serde_json::from_str(decrypted).map_err(|e| serde::de::Error::custom(e))
+    let decrypted = decrypt(data, nonce).map_err(serde::de::Error::custom)?;
+    let decrypted = std::str::from_utf8(&decrypted).map_err(serde::de::Error::custom)?;
+    serde_json::from_str(decrypted).map_err(serde::de::Error::custom)
 }
 
 pub fn setup(master_key: [u8; MASTER_KEY_LEN]) -> Result<(), Box<dyn Error>> {
@@ -109,7 +109,7 @@ fn prepare_key(key: [u8; MASTER_KEY_LEN], nonce: [u8; NONCE_LEN]) -> (UnboundKey
     let digest = digest(&digest::SHA256, &key);
     let key = digest.as_ref();
     let nonce_sequence = INonceSequence::new(Nonce::assume_unique_for_key(nonce));
-    (UnboundKey::new(&AES_256_GCM, &key).unwrap(), nonce_sequence)
+    (UnboundKey::new(&AES_256_GCM, key).unwrap(), nonce_sequence)
 }
 
 #[cfg(test)]
