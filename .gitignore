@@ -1,2 +1,14 @@
-/target
-/Cargo.lock
+# OS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+
+# Rust
+/target/
+**/*.rs.bk
+
+# Coverage
+/coverage
+build_rs_cov.profraw

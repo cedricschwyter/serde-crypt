@@ -1,0 +1,54 @@
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+name: Build
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Check out
+        uses: actions/checkout@v3
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: Setup Cache
+        uses: actions/cache@v3
+        continue-on-error: false
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Setup Tarpaulin
+        run: cargo install cargo-tarpaulin
+        continue-on-error: true
+
+      - name: Run Cargo:fmt
+        run: cargo fmt --all -- --check
+
+      - name: Run Cargo:clippy
+        run: cargo clippy --all-features -- -D warnings
+
+      - name: Run Cargo:test
+        run: cargo test --verbose --all-features
+
+      - name: Run Cargo:tarpaulin
+        run: cargo tarpaulin --verbose --all-features --out Xml --output-dir ./coverage
+
+      - name: Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage/cobertura.xml
