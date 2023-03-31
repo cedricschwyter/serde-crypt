@@ -8,7 +8,7 @@
 //! ```rust
 //! use ring::rand::{SecureRandom, SystemRandom};
 //! use serde::{Deserialize, Serialize};
-//! use serde_crypt::{MASTER_KEY_LEN, setup};
+//! use serde_crypt::{setup};
 //!
 //! #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 //! struct Example {
@@ -17,11 +17,11 @@
 //!     public: String,
 //! }
 //!
-//! let mut key: [u8; MASTER_KEY_LEN] = [0; MASTER_KEY_LEN];
+//! let mut key: [u8; 256] = [0; 256];
 //! let rand_gen = SystemRandom::new();
 //! rand_gen.fill(&mut key).unwrap();
 //!
-//! setup(key);
+//! setup(key.to_vec());
 //! let data = Example {
 //!     private: "private data".to_string(),
 //!     public: "public data".to_string(),
@@ -34,13 +34,11 @@
 //! ```
 //!
 
-use std::cell::RefCell;
 use std::error::Error;
-use std::sync::{Arc, Mutex};
 
 use base64::engine::general_purpose;
 use base64::Engine;
-use lazy_static::lazy_static;
+use once_cell::sync::OnceCell;
 use ring::aead::{
     Aad, BoundKey, Nonce, NonceSequence, OpeningKey, SealingKey, UnboundKey, AES_256_GCM, NONCE_LEN,
 };
@@ -51,10 +49,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde::{Deserializer, Serializer};
 
-lazy_static! {
-    static ref MASTER_KEY: Arc<Mutex<RefCell<Vec<u8>>>> =
-        Arc::new(Mutex::new(RefCell::new(vec![])));
-}
+static MASTER_KEY: OnceCell<Vec<u8>> = OnceCell::new();
 
 #[allow(dead_code)]
 pub fn serialize<S: Serializer, T: Serialize>(v: T, s: S) -> Result<S::Ok, S::Error> {
@@ -83,17 +78,12 @@ pub fn deserialize<'de, D: Deserializer<'de>, T: DeserializeOwned>(d: D) -> Resu
 }
 
 pub fn setup(master_key: Vec<u8>) {
-    let key = Arc::clone(&MASTER_KEY);
-    let key = key.lock().unwrap();
-    let mut key = key.borrow_mut();
-    *key = master_key;
+    MASTER_KEY.get_or_init(move || master_key);
 }
 
 fn encrypt(mut data: Vec<u8>, nonce: [u8; NONCE_LEN]) -> Result<Vec<u8>, Box<dyn Error>> {
-    let key = Arc::clone(&MASTER_KEY);
-    let key = key.lock().unwrap();
-    let key = key.borrow_mut();
-    let (key, nonce) = prepare_key(&*key, nonce);
+    let key = MASTER_KEY.get().unwrap();
+    let (key, nonce) = prepare_key(key, nonce);
     let mut encryption_key = SealingKey::new(key, nonce);
     encryption_key
         .seal_in_place_append_tag(Aad::empty(), &mut data)
@@ -103,9 +93,7 @@ fn encrypt(mut data: Vec<u8>, nonce: [u8; NONCE_LEN]) -> Result<Vec<u8>, Box<dyn
 }
 
 fn decrypt(mut data: Vec<u8>, nonce: [u8; NONCE_LEN]) -> Result<Vec<u8>, Box<dyn Error>> {
-    let key = Arc::clone(&MASTER_KEY);
-    let key = key.lock().unwrap();
-    let key = key.borrow_mut();
+    let key = MASTER_KEY.get().unwrap();
     let (key, nonce) = prepare_key(&*key, nonce);
     let mut decryption_key = OpeningKey::new(key, nonce);
     decryption_key
