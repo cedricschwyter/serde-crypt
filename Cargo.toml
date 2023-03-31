@@ -4,13 +4,11 @@
 name = "serde-crypt"
 version = "0.1.0"
 edition = "2021"
-description = "a serializer/deserializer for end-to-end encrypted serde serialization and deserialization - wasm-ready"
+description = "The end-to-end encrypted serde::Serializer and serde::Deserializer - wasm-ready"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/D3PSI/serde-crypt"
-
-[[bin]]
-name = "serde-crypt"
-path = "./main.rs"
+keywords = ["serde", "serialization", "crypto", "encryption"] #no-std
+categories = ["cryptography"] #no-std
 
 [lib]
 path = "./lib.rs"

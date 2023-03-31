@@ -1,5 +1,4 @@
 # serde-crypt
-custom serializer and deserializer for end-to-end encrypted serde serialization and deserialization - wasm-ready
 
 [![Build Status][action-badge]][action-url]
 [![Crate Docs][docs-badge]][docs-url]
@@ -14,3 +13,39 @@ custom serializer and deserializer for end-to-end encrypted serde serialization 
 [docs-url]: http://docs.rs/serde-crypt
 [coverage-badge]: https://img.shields.io/codecov/c/github/D3PSI/serde-crypt?logo=codecov&logoColor=white&style=flat-square
 [coverage-url]: https://app.codecov.io/gh/D3PSI/serde-crypt
+
+The end-to-end encrypted `serde::Serializer` and `serde::Deserializer`.
+**wasm-ready**.
+
+### Example
+
+```rust
+use ring::rand::{SecureRandom, SystemRandom};
+use serde::{Deserialize, Serialize};
+use serde_crypt::{setup, MASTER_KEY_LEN};
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+struct Example {
+    #[serde(with = "serde_crypt")]
+    private: String,
+    public: String,
+}
+
+fn main() -> Result<(), serde_json::Error> {
+    let mut key: [u8; MASTER_KEY_LEN] = [0; MASTER_KEY_LEN];
+    let rand_gen = SystemRandom::new();
+    rand_gen.fill(&mut key).unwrap();
+
+    setup(key);
+    let data = Example {
+        private: "private data".to_string(),
+        public: "public data".to_string(),
+    };
+
+    let serialized = serde_json::to_string(&data)?;
+    let deserialized: Example = serde_json::from_str(&serialized)?;
+
+    assert_eq!(deserialized, data);
+    Ok(())
+}
+```
