@@ -43,9 +43,7 @@
 //! let serialized = serde_json::to_string(&instance).unwrap();
 //! let deserialized: Test = serde_json::from_str(&serialized).unwrap();
 //!
-//! assert_eq!(deserialized.field, instance.field);
-//! assert_eq!(deserialized.other, instance.other);
-//! assert_eq!(deserialized.plain, instance.plain);
+//! assert_eq!(deserialized, instance);
 //! ```
 //!
 
@@ -203,9 +201,7 @@ mod test {
         let serialized = serde_json::to_string(&instance)?;
         let deserialized: Test = serde_json::from_str(&serialized)?;
 
-        assert_eq!(deserialized.field, instance.field);
-        assert_eq!(deserialized.other, instance.other);
-        assert_eq!(deserialized.plain, instance.plain);
+        assert_eq!(deserialized, instance);
 
         Ok(())
     }
