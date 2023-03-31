@@ -25,20 +25,10 @@ use serde::{Deserialize, Serialize};
 use serde_crypt::{setup, MASTER_KEY_LEN};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
-struct Other {
-	#[serde(with = "serde_crypt")]
-    field: Vec<u8>,
+struct Example {
     #[serde(with = "serde_crypt")]
-    plain: String,
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
-struct Test {
-    #[serde(with = "serde_crypt")]
-    field: Vec<u8>,
-    #[serde(with = "serde_crypt")]
-    other: Other,
-    plain: String,
+    private: String,
+    public: String,
 }
 
 fn main() -> Result<(), serde_json::Error> {
@@ -46,22 +36,16 @@ fn main() -> Result<(), serde_json::Error> {
     let rand_gen = SystemRandom::new();
     rand_gen.fill(&mut key).unwrap();
 
-    let instance = Test {
-        field: "a secret message".as_bytes().to_vec(),
-        other: Other {
-            field: "another secret message".as_bytes().to_vec(),
-            plain: "this is a plain nested string".to_string(),
-        },
-        plain: "this is a plain string".to_string(),
+    setup(key);
+    let data = Example {
+        private: "private data".to_string(),
+        public: "public data".to_string(),
     };
 
-    setup(key);
+    let serialized = serde_json::to_string(&data).unwrap();
+    let deserialized: Example = serde_json::from_str(&serialized).unwrap();
 
-    let serialized = serde_json::to_string(&instance)?;
-    let deserialized: Test = serde_json::from_str(&serialized)?;
-	
-    assert_eq!(deserialized, instance);
-
+    assert_eq!(deserialized, data);
     Ok(())
 }
 ```

@@ -11,20 +11,10 @@
 //! use serde_crypt::{MASTER_KEY_LEN, setup};
 //!
 //! #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
-//! struct Other {
+//! struct Example {
 //!     #[serde(with = "serde_crypt")]
-//!     field: Vec<u8>,
-//!     #[serde(with = "serde_crypt")]
-//!     plain: String,
-//! }
-//!
-//! #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
-//! struct Test {
-//!     #[serde(with = "serde_crypt")]
-//!     field: Vec<u8>,
-//!     #[serde(with = "serde_crypt")]
-//!     other: Other,
-//!     plain: String,
+//!     private: String,
+//!     public: String,
 //! }
 //!
 //! let mut key: [u8; MASTER_KEY_LEN] = [0; MASTER_KEY_LEN];
@@ -32,19 +22,15 @@
 //! rand_gen.fill(&mut key).unwrap();
 //!
 //! setup(key);
-//! let instance = Test {
-//!     field: "a secret message".as_bytes().to_vec(),
-//!     other: Other {
-//!         field: "another secret message".as_bytes().to_vec(),
-//!         plain: "this is a plain nested string".to_string(),
-//!     },
-//!     plain: "this is a plain string".to_string(),
+//! let data = Example {
+//!     private: "private data".to_string(),
+//!     public: "public data".to_string(),
 //! };
 //!
-//! let serialized = serde_json::to_string(&instance).unwrap();
-//! let deserialized: Test = serde_json::from_str(&serialized).unwrap();
+//! let serialized = serde_json::to_string(&data).unwrap();
+//! let deserialized: Example = serde_json::from_str(&serialized).unwrap();
 //!
-//! assert_eq!(deserialized, instance);
+//! assert_eq!(deserialized, data);
 //! ```
 //!
 
@@ -171,7 +157,6 @@ mod test {
     struct Other {
         #[serde(with = "crate")]
         field: Vec<u8>,
-        #[serde(with = "crate")]
         plain: String,
     }
 
@@ -204,7 +189,32 @@ mod test {
         let deserialized: Test = serde_json::from_str(&serialized)?;
 
         assert_eq!(deserialized, instance);
+        Ok(())
+    }
 
+    #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+    struct Example {
+        #[serde(with = "crate")]
+        private: String,
+        public: String,
+    }
+
+    #[test]
+    fn readme() -> Result<(), serde_json::Error> {
+        let mut key: [u8; MASTER_KEY_LEN] = [0; MASTER_KEY_LEN];
+        let rand_gen = SystemRandom::new();
+        rand_gen.fill(&mut key).unwrap();
+
+        setup(key);
+        let data = Example {
+            private: "private data".to_string(),
+            public: "public data".to_string(),
+        };
+
+        let serialized = serde_json::to_string(&data)?;
+        let deserialized: Example = serde_json::from_str(&serialized)?;
+
+        assert_eq!(deserialized, data);
         Ok(())
     }
 }
