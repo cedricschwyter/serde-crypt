@@ -94,7 +94,7 @@ fn encrypt(mut data: Vec<u8>, nonce: [u8; NONCE_LEN]) -> Result<Vec<u8>, Box<dyn
 
 fn decrypt(mut data: Vec<u8>, nonce: [u8; NONCE_LEN]) -> Result<Vec<u8>, Box<dyn Error>> {
     let key = MASTER_KEY.get().unwrap();
-    let (key, nonce) = prepare_key(&*key, nonce);
+    let (key, nonce) = prepare_key(key, nonce);
     let mut decryption_key = OpeningKey::new(key, nonce);
     decryption_key
         .open_in_place(Aad::empty(), &mut data)
