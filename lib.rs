@@ -3,7 +3,7 @@
 //! The end-to-end encrypted `serde::Serializer` and `serde::Deserializer`.
 //! **wasm-ready**.
 //!
-//! ## Examples
+//! ## Example
 //!
 //! ```rust
 //! use ring::rand::{SecureRandom, SystemRandom};
@@ -14,6 +14,7 @@
 //! struct Other {
 //!     #[serde(with = "serde_crypt")]
 //!     field: Vec<u8>,
+//!     #[serde(with = "serde_crypt")]
 //!     plain: String,
 //! }
 //!
@@ -170,6 +171,7 @@ mod test {
     struct Other {
         #[serde(with = "crate")]
         field: Vec<u8>,
+        #[serde(with = "crate")]
         plain: String,
     }
 

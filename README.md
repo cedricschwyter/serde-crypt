@@ -17,7 +17,7 @@
 The end-to-end encrypted `serde::Serializer` and `serde::Deserializer`.
 **wasm-ready**.
 
-### Examples
+### Example
 
 ```rust
 use ring::rand::{SecureRandom, SystemRandom};
@@ -26,7 +26,9 @@ use serde_crypt::{setup, MASTER_KEY_LEN};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 struct Other {
+	#[serde(with = "serde_crypt")]
     field: Vec<u8>,
+    #[serde(with = "serde_crypt")]
     plain: String,
 }
 
