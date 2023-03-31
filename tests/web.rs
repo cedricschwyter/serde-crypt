@@ -9,8 +9,8 @@ wasm_bindgen_test_configure!(run_in_browser);
 use ring::rand::{SecureRandom, SystemRandom};
 use serde::{Deserialize, Serialize};
 
-use serde_crypt::{setup, MASTER_KEY_LEN};
-use std::{error::Error, println};
+use serde_crypt::setup;
+use std::error::Error;
 use wasm_bindgen_test::*;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -29,11 +29,11 @@ struct Other {
 
 #[wasm_bindgen_test]
 fn flow() -> Result<(), Box<dyn Error>> {
-    let mut key: [u8; MASTER_KEY_LEN] = [0; MASTER_KEY_LEN];
+    let mut key: [u8; 256] = [0; 256];
     let rand_gen = SystemRandom::new();
     rand_gen.fill(&mut key).unwrap();
 
-    setup(key)?;
+    setup(key.to_vec());
     let instance = Test {
         field: "a super secret message".as_bytes().to_vec(),
         other: Other {

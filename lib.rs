@@ -51,11 +51,9 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde::{Deserializer, Serializer};
 
-pub const MASTER_KEY_LEN: usize = 32;
-
 lazy_static! {
-    pub static ref MASTER_KEY: Arc<Mutex<RefCell<[u8; MASTER_KEY_LEN]>>> =
-        Arc::new(Mutex::new(RefCell::new([0; MASTER_KEY_LEN])));
+    static ref MASTER_KEY: Arc<Mutex<RefCell<Vec<u8>>>> =
+        Arc::new(Mutex::new(RefCell::new(vec![])));
 }
 
 #[allow(dead_code)]
@@ -84,7 +82,7 @@ pub fn deserialize<'de, D: Deserializer<'de>, T: DeserializeOwned>(d: D) -> Resu
     serde_json::from_str(decrypted).map_err(serde::de::Error::custom)
 }
 
-pub fn setup(master_key: [u8; MASTER_KEY_LEN]) {
+pub fn setup(master_key: Vec<u8>) {
     let key = Arc::clone(&MASTER_KEY);
     let key = key.lock().unwrap();
     let mut key = key.borrow_mut();
@@ -95,7 +93,7 @@ fn encrypt(mut data: Vec<u8>, nonce: [u8; NONCE_LEN]) -> Result<Vec<u8>, Box<dyn
     let key = Arc::clone(&MASTER_KEY);
     let key = key.lock().unwrap();
     let key = key.borrow_mut();
-    let (key, nonce) = prepare_key(*key, nonce);
+    let (key, nonce) = prepare_key(&*key, nonce);
     let mut encryption_key = SealingKey::new(key, nonce);
     encryption_key
         .seal_in_place_append_tag(Aad::empty(), &mut data)
@@ -108,7 +106,7 @@ fn decrypt(mut data: Vec<u8>, nonce: [u8; NONCE_LEN]) -> Result<Vec<u8>, Box<dyn
     let key = Arc::clone(&MASTER_KEY);
     let key = key.lock().unwrap();
     let key = key.borrow_mut();
-    let (key, nonce) = prepare_key(*key, nonce);
+    let (key, nonce) = prepare_key(&*key, nonce);
     let mut decryption_key = OpeningKey::new(key, nonce);
     decryption_key
         .open_in_place(Aad::empty(), &mut data)
@@ -139,8 +137,8 @@ fn generate_random_nonce() -> [u8; NONCE_LEN] {
     raw_nonce
 }
 
-fn prepare_key(key: [u8; MASTER_KEY_LEN], nonce: [u8; NONCE_LEN]) -> (UnboundKey, INonceSequence) {
-    let digest = digest(&digest::SHA256, &key);
+fn prepare_key(key: &Vec<u8>, nonce: [u8; NONCE_LEN]) -> (UnboundKey, INonceSequence) {
+    let digest = digest(&digest::SHA256, key.as_slice());
     let key = digest.as_ref();
     let nonce_sequence = INonceSequence::new(Nonce::assume_unique_for_key(nonce));
     (UnboundKey::new(&AES_256_GCM, key).unwrap(), nonce_sequence)
@@ -151,7 +149,7 @@ mod test {
     use ring::rand::{SecureRandom, SystemRandom};
     use serde::{Deserialize, Serialize};
 
-    use crate::{setup, MASTER_KEY_LEN};
+    use crate::setup;
 
     #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
     struct Other {
@@ -171,11 +169,11 @@ mod test {
 
     #[test]
     fn flow() -> Result<(), serde_json::Error> {
-        let mut key: [u8; MASTER_KEY_LEN] = [0; MASTER_KEY_LEN];
+        let mut key: [u8; 256] = [0; 256];
         let rand_gen = SystemRandom::new();
         rand_gen.fill(&mut key).unwrap();
 
-        setup(key);
+        setup(key.to_vec());
         let instance = Test {
             field: "a secret message".as_bytes().to_vec(),
             other: Other {
@@ -201,11 +199,11 @@ mod test {
 
     #[test]
     fn readme() -> Result<(), serde_json::Error> {
-        let mut key: [u8; MASTER_KEY_LEN] = [0; MASTER_KEY_LEN];
+        let mut key: [u8; 256] = [0; 256];
         let rand_gen = SystemRandom::new();
         rand_gen.fill(&mut key).unwrap();
 
-        setup(key);
+        setup(key.to_vec());
         let data = Example {
             private: "private data".to_string(),
             public: "public data".to_string(),
