@@ -1,3 +1,54 @@
+#![forbid(unsafe_code)]
+
+//! The end-to-end encrypted `serde::Serializer` and `serde::Deserializer`.
+//! **wasm-ready**.
+//!
+//! ## Examples
+//!
+//! ```rust
+//! use ring::rand::{SecureRandom, SystemRandom};
+//! use serde::{Deserialize, Serialize};
+//! use serde_crypt::{MASTER_KEY_LEN, setup};
+//!
+//! #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+//! struct Other {
+//!     #[serde(with = "serde_crypt")]
+//!     field: Vec<u8>,
+//!     plain: String,
+//! }
+//!
+//! #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+//! struct Test {
+//!     #[serde(with = "serde_crypt")]
+//!     field: Vec<u8>,
+//!     #[serde(with = "serde_crypt")]
+//!     other: Other,
+//!     plain: String,
+//! }
+//!
+//! let mut key: [u8; MASTER_KEY_LEN] = [0; MASTER_KEY_LEN];
+//! let rand_gen = SystemRandom::new();
+//! rand_gen.fill(&mut key).unwrap();
+//!
+//! setup(key);
+//! let instance = Test {
+//!     field: "a secret message".as_bytes().to_vec(),
+//!     other: Other {
+//!         field: "another secret message".as_bytes().to_vec(),
+//!         plain: "this is a plain nested string".to_string(),
+//!     },
+//!     plain: "this is a plain string".to_string(),
+//! };
+//!
+//! let serialized = serde_json::to_string(&instance).unwrap();
+//! let deserialized: Test = serde_json::from_str(&serialized).unwrap();
+//!
+//! assert_eq!(deserialized.field, instance.field);
+//! assert_eq!(deserialized.other, instance.other);
+//! assert_eq!(deserialized.plain, instance.plain);
+//! ```
+//!
+
 use std::cell::RefCell;
 use std::error::Error;
 use std::sync::{Arc, Mutex};
@@ -48,13 +99,11 @@ pub fn deserialize<'de, D: Deserializer<'de>, T: DeserializeOwned>(d: D) -> Resu
     serde_json::from_str(decrypted).map_err(serde::de::Error::custom)
 }
 
-pub fn setup(master_key: [u8; MASTER_KEY_LEN]) -> Result<(), Box<dyn Error>> {
+pub fn setup(master_key: [u8; MASTER_KEY_LEN]) {
     let key = Arc::clone(&MASTER_KEY);
     let key = key.lock().unwrap();
     let mut key = key.borrow_mut();
     *key = master_key;
-
-    Ok(())
 }
 
 fn encrypt(mut data: Vec<u8>, nonce: [u8; NONCE_LEN]) -> Result<Vec<u8>, Box<dyn Error>> {
@@ -118,39 +167,45 @@ mod test {
     use serde::{Deserialize, Serialize};
 
     use crate::{setup, MASTER_KEY_LEN};
-    use std::error::Error;
+
+    #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+    struct Other {
+        #[serde(with = "crate")]
+        field: Vec<u8>,
+        plain: String,
+    }
 
     #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
     struct Test {
         #[serde(with = "crate")]
         field: Vec<u8>,
         #[serde(with = "crate")]
-        r#struct: Other,
-    }
-
-    #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
-    struct Other {
-        #[serde(with = "crate")]
-        field: Vec<u8>,
+        other: Other,
+        plain: String,
     }
 
     #[test]
-    fn flow() -> Result<(), Box<dyn Error>> {
+    fn flow() -> Result<(), serde_json::Error> {
         let mut key: [u8; MASTER_KEY_LEN] = [0; MASTER_KEY_LEN];
         let rand_gen = SystemRandom::new();
         rand_gen.fill(&mut key).unwrap();
 
-        setup(key)?;
+        setup(key);
         let instance = Test {
-            field: "a super secret message".as_bytes().to_vec(),
-            r#struct: Other {
+            field: "a secret message".as_bytes().to_vec(),
+            other: Other {
                 field: "another secret message".as_bytes().to_vec(),
+                plain: "this is a plain nested string".to_string(),
             },
+            plain: "this is a plain string".to_string(),
         };
+
         let serialized = serde_json::to_string(&instance)?;
         let deserialized: Test = serde_json::from_str(&serialized)?;
 
         assert_eq!(deserialized.field, instance.field);
+        assert_eq!(deserialized.other, instance.other);
+        assert_eq!(deserialized.plain, instance.plain);
 
         Ok(())
     }
