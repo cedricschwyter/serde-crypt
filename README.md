@@ -42,8 +42,8 @@ fn main() -> Result<(), serde_json::Error> {
         public: "public data".to_string(),
     };
 
-    let serialized = serde_json::to_string(&data).unwrap();
-    let deserialized: Example = serde_json::from_str(&serialized).unwrap();
+    let serialized = serde_json::to_string(&data)?;
+    let deserialized: Example = serde_json::from_str(&serialized)?;
 
     assert_eq!(deserialized, data);
     Ok(())
