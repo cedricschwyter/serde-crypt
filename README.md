@@ -22,7 +22,7 @@ The end-to-end encrypted `serde::Serializer` and `serde::Deserializer`.
 ```rust
 use ring::rand::{SecureRandom, SystemRandom};
 use serde::{Deserialize, Serialize};
-use serde_crypt::{setup, MASTER_KEY_LEN};
+use serde_crypt::setup;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 struct Example {
@@ -32,7 +32,7 @@ struct Example {
 }
 
 fn main() -> Result<(), serde_json::Error> {
-    let mut key: [u8; MASTER_KEY_LEN] = [0; MASTER_KEY_LEN];
+    let mut key: [u8; 256] = [0; 256];
     let rand_gen = SystemRandom::new();
     rand_gen.fill(&mut key).unwrap();
 
