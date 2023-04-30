@@ -35,21 +35,23 @@
 //!
 
 use std::error::Error;
+use std::fmt::Display;
+use std::sync::Mutex;
 
 use base64::engine::general_purpose;
 use base64::Engine;
-use once_cell::sync::OnceCell;
+use once_cell::sync::Lazy;
 use ring::aead::{
     Aad, BoundKey, Nonce, NonceSequence, OpeningKey, SealingKey, UnboundKey, AES_256_GCM, NONCE_LEN,
 };
 use ring::digest::{self, digest};
-use ring::error;
+use ring::error::{self, Unspecified};
 use ring::rand::{SecureRandom, SystemRandom};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde::{Deserializer, Serializer};
 
-static MASTER_KEY: OnceCell<Vec<u8>> = OnceCell::new();
+static MASTER_KEY: Lazy<Mutex<Vec<u8>>> = Lazy::new(|| Mutex::new(vec![]));
 
 #[allow(dead_code)]
 pub fn serialize<S: Serializer, T: Serialize>(v: T, s: S) -> Result<S::Ok, S::Error> {
@@ -78,31 +80,48 @@ pub fn deserialize<'de, D: Deserializer<'de>, T: DeserializeOwned>(d: D) -> Resu
 }
 
 pub fn setup(master_key: Vec<u8>) {
-    MASTER_KEY.get_or_init(move || master_key);
+    *MASTER_KEY.lock().unwrap() = master_key;
 }
 
 fn encrypt(mut data: Vec<u8>, nonce: [u8; NONCE_LEN]) -> Result<Vec<u8>, Box<dyn Error>> {
-    let key = MASTER_KEY.get().unwrap();
-    let (key, nonce) = prepare_key(key, nonce);
+    let key = MASTER_KEY.lock().unwrap();
+    let (key, nonce) = prepare_key(&key, nonce);
     let mut encryption_key = SealingKey::new(key, nonce);
     encryption_key
         .seal_in_place_append_tag(Aad::empty(), &mut data)
-        .unwrap();
+        .map_err(|e| CryptError::EncryptionError(e))?;
 
     Ok(data)
 }
 
 fn decrypt(mut data: Vec<u8>, nonce: [u8; NONCE_LEN]) -> Result<Vec<u8>, Box<dyn Error>> {
-    let key = MASTER_KEY.get().unwrap();
-    let (key, nonce) = prepare_key(key, nonce);
+    let key = MASTER_KEY.lock().unwrap();
+    let (key, nonce) = prepare_key(&key, nonce);
     let mut decryption_key = OpeningKey::new(key, nonce);
     decryption_key
         .open_in_place(Aad::empty(), &mut data)
-        .unwrap();
+        .map_err(|e| CryptError::DecryptionError(e))?;
     let length = data.len() - AES_256_GCM.tag_len();
 
     Ok(data[..length].to_vec())
 }
+
+#[derive(Debug)]
+pub enum CryptError {
+    DecryptionError(Unspecified),
+    EncryptionError(Unspecified),
+}
+
+impl Display for CryptError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DecryptionError(e) => e.fmt(f),
+            Self::EncryptionError(e) => e.fmt(f),
+        }
+    }
+}
+
+impl Error for CryptError {}
 
 struct INonceSequence(Option<Nonce>);
 
