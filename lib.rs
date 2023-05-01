@@ -55,32 +55,36 @@ static MASTER_KEY: Lazy<Mutex<Vec<u8>>> = Lazy::new(|| Mutex::new(vec![]));
 
 #[allow(dead_code)]
 pub fn serialize<S: Serializer, T: Serialize>(v: T, s: S) -> Result<S::Ok, S::Error> {
-    let nonce = generate_random_nonce();
-    let serialized = serde_json::to_string(&v)
-        .map_err(serde::ser::Error::custom)
-        .map(|t| t.as_bytes().to_vec())?;
-    let mut encrypted = encrypt(serialized, nonce).map_err(serde::ser::Error::custom)?;
-    let mut nonce_encrypted = nonce.to_vec();
-    nonce_encrypted.append(&mut encrypted);
-    let base64 = general_purpose::URL_SAFE_NO_PAD.encode(nonce_encrypted);
+    let base64 = e(v).map_err(serde::ser::Error::custom)?;
     String::serialize(&base64, s)
 }
 
 #[allow(dead_code)]
-pub fn deserialize<'de, D: Deserializer<'de>, T: DeserializeOwned>(d: D) -> Result<T, D::Error> {
-    let base64 = String::deserialize(d)?;
-    let decoded = general_purpose::URL_SAFE_NO_PAD
-        .decode(base64.as_bytes())
-        .map_err(serde::de::Error::custom)?;
-    let nonce = decoded[..NONCE_LEN].try_into().unwrap();
-    let data = decoded[NONCE_LEN..].to_vec();
-    let decrypted = decrypt(data, nonce).map_err(serde::de::Error::custom)?;
-    let decrypted = std::str::from_utf8(&decrypted).map_err(serde::de::Error::custom)?;
-    serde_json::from_str(decrypted).map_err(serde::de::Error::custom)
+pub fn deserialize<'de, D: Deserializer<'de>, T: DeserializeOwned>(de: D) -> Result<T, D::Error> {
+    let base64 = String::deserialize(de)?;
+    d(base64).map_err(serde::de::Error::custom)
 }
 
 pub fn setup(master_key: Vec<u8>) {
     *MASTER_KEY.lock().unwrap() = master_key;
+}
+
+pub fn e<T: Serialize>(source: T) -> Result<String, Box<dyn Error>> {
+    let nonce = generate_random_nonce();
+    let serialized = serde_json::to_string(&source).map(|t| t.as_bytes().to_vec())?;
+    let mut encrypted = encrypt(serialized, nonce)?;
+    let mut nonce_encrypted = nonce.to_vec();
+    nonce_encrypted.append(&mut encrypted);
+    Ok(general_purpose::URL_SAFE_NO_PAD.encode(nonce_encrypted))
+}
+
+pub fn d<T: DeserializeOwned>(source: String) -> Result<T, Box<dyn Error>> {
+    let decoded = general_purpose::URL_SAFE_NO_PAD.decode(source.as_bytes())?;
+    let nonce = decoded[..NONCE_LEN].try_into().unwrap();
+    let data = decoded[NONCE_LEN..].to_vec();
+    let decrypted = decrypt(data, nonce)?;
+    let decrypted = std::str::from_utf8(&decrypted)?;
+    Ok(serde_json::from_str(decrypted)?)
 }
 
 fn encrypt(mut data: Vec<u8>, nonce: [u8; NONCE_LEN]) -> Result<Vec<u8>, Box<dyn Error>> {
