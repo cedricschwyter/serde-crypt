@@ -93,7 +93,7 @@ fn encrypt(mut data: Vec<u8>, nonce: [u8; NONCE_LEN]) -> Result<Vec<u8>, Box<dyn
     let mut encryption_key = SealingKey::new(key, nonce);
     encryption_key
         .seal_in_place_append_tag(Aad::empty(), &mut data)
-        .map_err(|e| CryptError::EncryptionError(e))?;
+        .map_err(CryptError::EncryptionError)?;
 
     Ok(data)
 }
@@ -104,7 +104,7 @@ fn decrypt(mut data: Vec<u8>, nonce: [u8; NONCE_LEN]) -> Result<Vec<u8>, Box<dyn
     let mut decryption_key = OpeningKey::new(key, nonce);
     decryption_key
         .open_in_place(Aad::empty(), &mut data)
-        .map_err(|e| CryptError::DecryptionError(e))?;
+        .map_err(CryptError::DecryptionError)?;
     let length = data.len() - AES_256_GCM.tag_len();
 
     Ok(data[..length].to_vec())
